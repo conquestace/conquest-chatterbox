@@ -9,6 +9,12 @@ development.
 
 from flask_app import create_app
 
+try:
+    import uvicorn  # type: ignore
+except Exception:  # pragma: no cover - uvicorn optional
+    uvicorn = None
+
+
 app = create_app()
 
 
@@ -19,4 +25,10 @@ def webapp():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    # If the application object has a ``router`` attribute we are dealing with a
+    # FastAPI/Starlette app (used when Gradio is enabled). In that case run with
+    # ``uvicorn``. Otherwise fall back to Flask's built-in development server.
+    if hasattr(app, "router") and uvicorn is not None:
+        uvicorn.run(app, host="0.0.0.0", port=5000)
+    else:
+        app.run(debug=True)

@@ -119,8 +119,10 @@ Then start the server by running:
 python main.py
 ```
 
-This launches a Flask application on `http://localhost:5000`. The root endpoint
-returns a short message and you can access the TTS and voice conversion APIs at
+This launches a Flask application on `http://localhost:5000`. If Gradio is also
+installed, the server will automatically run via `uvicorn` and expose the full
+demo UI at `/gradio` in addition to the REST API. The root endpoint returns a
+short message and you can access the TTS and voice conversion APIs at
 `/api/tts` and `/api/vc` respectively.
 
 # Supported Lanugage
