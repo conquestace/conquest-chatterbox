@@ -78,6 +78,12 @@ def refresh_samples(sample_list):
     return gr.Dropdown.update(choices=names, value=names[-1] if names else None)
 
 
+def refresh_queue(queue):
+    queue = queue or []
+    numbered = "\n".join(f"{i+1}. {p}" for i, p in enumerate(queue))
+    return numbered
+
+
 def generate_next(model, queue, samples, selected_sample, text, exaggeration, temperature, seed_num, cfgw, min_p, top_p, repetition_penalty):
     if queue:
         prompt = queue.pop(0)
@@ -172,7 +178,9 @@ with gr.Blocks(title="Chatterbox TTS", js=LOCAL_JS) as demo:
                     top_p = gr.Slider(0.00, 1.00, step=0.01, label="top_p", value=1.00)
                     repetition_penalty = gr.Slider(1.00, 2.00, step=0.1, label="repetition_penalty", value=1.2)
 
-                add_prompt_btn.click(add_prompt, [queue_state, text], [queue_state, queue_display])
+                add_prompt_btn.click(add_prompt, [queue_state, text], [queue_state, queue_display]).then(
+                    None, None, None, js="(q)=>saveItem('queue', q)"
+                )
                 add_sample_btn.click(add_sample, [sample_state, sample_input], [sample_state, sample_select]).then(
                     None, None, None, js="(s)=>saveItem('samples', s)"
                 )
@@ -189,13 +197,18 @@ with gr.Blocks(title="Chatterbox TTS", js=LOCAL_JS) as demo:
         demo.load(
             fn=None,
             inputs=[],
-            outputs=[sample_state, output_state],
-            js="()=>[loadItem('samples'), loadItem('outputs')]",
+            outputs=[sample_state, output_state, queue_state],
+            js="()=>[loadItem('samples'), loadItem('outputs'), loadItem('queue')]",
         )
         demo.load(
             fn=refresh_samples,
             inputs=[sample_state],
             outputs=sample_select,
+        )
+        demo.load(
+            fn=refresh_queue,
+            inputs=[queue_state],
+            outputs=queue_display,
         )
 
         run_btn.click(
@@ -215,7 +228,7 @@ with gr.Blocks(title="Chatterbox TTS", js=LOCAL_JS) as demo:
                 repetition_penalty,
             ],
             outputs=[audio_output, queue_state, queue_display],
-        ).then(None, None, None, js="(a)=>{let o=loadItem('outputs');o.push(a);saveItem('outputs',o);}")
+        ).then(None, None, None, js="(a,q)=>{let o=loadItem('outputs');o.push(a);saveItem('outputs',o);saveItem('queue',q);}")
 
         generate_all_btn.click(
             fn=generate_all,
@@ -235,7 +248,7 @@ with gr.Blocks(title="Chatterbox TTS", js=LOCAL_JS) as demo:
                 keep_gen,
             ],
             outputs=[audio_output, queue_state, queue_display],
-        ).then(None, None, None, js="(a)=>{let o=loadItem('outputs');o.push(a);saveItem('outputs',o);}")
+        ).then(None, None, None, js="(a,q)=>{let o=loadItem('outputs');o.push(a);saveItem('outputs',o);saveItem('queue',q);}")
 
         clear_btn.click(
             fn=clear_storage,
