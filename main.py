@@ -16,6 +16,14 @@ from chatterbox.audio_editing import (
     crossfade,
 )
 
+LOCAL_JS = """
+function loadItem(key){
+  try { return JSON.parse(localStorage.getItem(key) || "[]"); } catch(e){ return []; }
+}
+function saveItem(key,val){ localStorage.setItem(key, JSON.stringify(val)); }
+function clearLS(){ localStorage.clear(); }
+"""
+
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 EXAMPLE_TEXTS = [
@@ -75,6 +83,16 @@ def add_sample(sample_list, sample_path):
         sample_list.append(sample_path)
     names = [Path(p).name for p in sample_list]
     return sample_list, gr.Dropdown.update(choices=names, value=names[-1] if names else None)
+
+
+def refresh_samples(sample_list):
+    names = [Path(p).name for p in sample_list or []]
+    return gr.Dropdown.update(choices=names, value=names[-1] if names else None)
+
+
+def refresh_queue(queue):
+    queue = queue or []
+    return "\n".join(queue)
 
 
 def generate_next(model, queue, samples, selected_sample, text, exaggeration, temperature, seed_num, cfgw, min_p, top_p, repetition_penalty):
@@ -162,7 +180,11 @@ def edit_crossfade(audio1, audio2, duration_sec):
     return sr1, out
 
 
-with gr.Blocks(title="Chatterbox") as demo:
+def clear_storage():
+    return [], [], "", gr.Dropdown.update(choices=[], value=None)
+
+
+with gr.Blocks(title="Chatterbox", js=LOCAL_JS) as demo:
     gr.Markdown("# Chatterbox Main Interface")
     tts_state = gr.State(None)
     vc_state = gr.State(None)
@@ -195,15 +217,36 @@ with gr.Blocks(title="Chatterbox") as demo:
                     top_p = gr.Slider(0.00, 1.00, step=0.01, label="top_p", value=1.00)
                     repetition_penalty = gr.Slider(1.00, 2.00, step=0.1, label="repetition_penalty", value=1.2)
 
-                add_prompt_btn.click(add_prompt, [queue_state, text], [queue_state, queue_display])
-                add_sample_btn.click(add_sample, [sample_state, sample_input], [sample_state, sample_select])
+                add_prompt_btn.click(add_prompt, [queue_state, text], [queue_state, queue_display]).then(
+                    None, None, None, js="(q)=>saveItem('queue', q)"
+                )
+                add_sample_btn.click(add_sample, [sample_state, sample_input], [sample_state, sample_select]).then(
+                    None, None, None, js="(s)=>saveItem('samples', s)"
+                )
 
                 run_tts = gr.Button("Generate", variant="primary")
+                clear_btn = gr.Button("Clear LocalStorage")
 
             with gr.Column():
                 tts_output = gr.Audio(label="Output Audio")
 
         demo.load(fn=load_tts_model, inputs=[], outputs=tts_state)
+        demo.load(
+            fn=None,
+            inputs=[],
+            outputs=[sample_state, queue_state],
+            js="()=>[loadItem('samples'), loadItem('queue')]",
+        )
+        demo.load(
+            fn=refresh_samples,
+            inputs=[sample_state],
+            outputs=sample_select,
+        )
+        demo.load(
+            fn=refresh_queue,
+            inputs=[queue_state],
+            outputs=queue_display,
+        )
         run_tts.click(
             fn=generate_next,
             inputs=[
@@ -221,6 +264,13 @@ with gr.Blocks(title="Chatterbox") as demo:
                 repetition_penalty,
             ],
             outputs=[tts_output, queue_state, queue_display],
+        ).then(None, None, None, js="(_,q)=>saveItem('queue', q)")
+
+        clear_btn.click(
+            fn=clear_storage,
+            inputs=[],
+            outputs=[sample_state, queue_state, queue_display, sample_select],
+            js="clearLS"
         )
 
     with gr.Tab("Voice Conversion"):
