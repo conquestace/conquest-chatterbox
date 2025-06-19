@@ -2,7 +2,10 @@ from flask import Blueprint, request, send_file, jsonify
 import io
 import soundfile as sf
 
-from ..models import get_tts_model
+try:
+    from ..models import get_tts_model
+except ImportError:  # pragma: no cover - heavy deps
+    get_tts_model = None
 from ..utils import set_seed
 
 
@@ -24,6 +27,9 @@ def tts():
 
     if seed_num:
         set_seed(seed_num)
+
+    if get_tts_model is None:
+        return {"error": "TTS dependencies not installed"}, 500
 
     model = get_tts_model()
     wav = model.generate(
