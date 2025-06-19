@@ -1,6 +1,11 @@
-import torch
-from chatterbox.tts import ChatterboxTTS
-from chatterbox.vc import ChatterboxVC
+try:
+    import torch
+    from chatterbox.tts import ChatterboxTTS
+    from chatterbox.vc import ChatterboxVC
+except ModuleNotFoundError as e:  # pragma: no cover - torch heavy
+    raise ImportError(
+        "Required dependencies for Chatterbox are not installed."
+    ) from e
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 

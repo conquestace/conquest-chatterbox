@@ -3,7 +3,10 @@ import tempfile
 import soundfile as sf
 from flask import Blueprint, request, send_file
 
-from ..models import get_vc_model
+try:
+    from ..models import get_vc_model
+except ImportError:  # pragma: no cover - heavy deps
+    get_vc_model = None
 
 
 vc_bp = Blueprint("vc", __name__)
@@ -13,6 +16,9 @@ vc_bp = Blueprint("vc", __name__)
 def voice_convert():
     if "audio" not in request.files:
         return {"error": "audio file required"}, 400
+
+    if get_vc_model is None:
+        return {"error": "VC dependencies not installed"}, 500
 
     audio_file = request.files["audio"]
     target_file = request.files.get("target_voice")

@@ -6,4 +6,34 @@
     <li><a href="/api/vc">/api/vc</a> - Voice conversion</li>
     <li><a href="/api/edit">/api/edit</a> - Audio editing</li>
 </ul>
+
+<h2>Quick Demo</h2>
+<form id="tts-form">
+    <label for="tts-text">Text:</label><br>
+    <textarea id="tts-text" name="text" rows="4" cols="50"></textarea><br>
+    <button type="submit">Synthesize</button>
+</form>
+<audio id="tts-audio" controls style="display:none"></audio>
+
+<script>
+document.getElementById('tts-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const text = document.getElementById('tts-text').value;
+    const resp = await fetch('/api/tts', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({text})
+    });
+    if (resp.ok) {
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const audio = document.getElementById('tts-audio');
+        audio.src = url;
+        audio.style.display = 'block';
+        audio.play();
+    } else {
+        alert('Error synthesizing speech');
+    }
+});
+</script>
 {% endblock %}

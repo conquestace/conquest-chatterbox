@@ -106,8 +106,14 @@ wav = model.generate(sample_prompts[0])
 
 ## Running the Flask API
 
-You can also interact with Chatterbox via a lightweight REST API. Start the
-server by running:
+You can also interact with Chatterbox via a lightweight REST API. First install
+the optional server dependencies:
+
+```bash
+pip install -e .[server]
+```
+
+Then start the server by running:
 
 ```bash
 python main.py
