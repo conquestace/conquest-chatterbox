@@ -6,6 +6,14 @@ import torch
 import gradio as gr
 from chatterbox.tts import ChatterboxTTS
 
+LOCAL_JS = """
+function loadItem(key){
+  try { return JSON.parse(localStorage.getItem(key) || "[]"); } catch(e){ return []; }
+}
+function saveItem(key,val){ localStorage.setItem(key, JSON.stringify(val)); }
+function clearLS(){ localStorage.clear(); }
+"""
+
 EXAMPLE_TEXTS = [
     "Now let's make my mum's favourite. So three mars bars into the pan. Then we add the tuna and just stir for a bit, just let the chocolate and fish infuse. A sprinkle of olive oil and some tomato ketchup. Now smell that. Oh boy this is going to be incredible.",
     "Ezreal and Jinx teamed up with Ahri, Yasuo, and Teemo to take down the enemy's Nexus in an epic late-game pentakill.",
@@ -53,7 +61,8 @@ def add_prompt(queue, text):
     queue = queue or []
     if text:
         queue.append(text)
-    return queue, "\n".join(queue)
+    numbered = "\n".join(f"{i+1}. {p}" for i, p in enumerate(queue))
+    return queue, numbered
 
 
 def add_sample(sample_list, sample_path):
@@ -62,6 +71,11 @@ def add_sample(sample_list, sample_path):
         sample_list.append(sample_path)
     names = [Path(p).name for p in sample_list]
     return sample_list, gr.Dropdown.update(choices=names, value=names[-1] if names else None)
+
+
+def refresh_samples(sample_list):
+    names = [Path(p).name for p in sample_list or []]
+    return gr.Dropdown.update(choices=names, value=names[-1] if names else None)
 
 
 def generate_next(model, queue, samples, selected_sample, text, exaggeration, temperature, seed_num, cfgw, min_p, top_p, repetition_penalty):
@@ -90,14 +104,47 @@ def generate_next(model, queue, samples, selected_sample, text, exaggeration, te
         repetition_penalty,
     )
 
-    return (sr, wav), queue, "\n".join(queue)
+    numbered = "\n".join(f"{i+1}. {p}" for i, p in enumerate(queue))
+    return (sr, wav), queue, numbered
 
 
-with gr.Blocks(title="Chatterbox TTS") as demo:
+def generate_all(model, queue, samples, selected_sample, text, exaggeration, temperature, seed_num, cfgw, min_p, top_p, repetition_penalty, keep_generating=False):
+    result = None
+    iterations = 0
+    while queue:
+        result, queue, _ = generate_next(
+            model,
+            queue,
+            samples,
+            selected_sample,
+            text,
+            exaggeration,
+            temperature,
+            seed_num,
+            cfgw,
+            min_p,
+            top_p,
+            repetition_penalty,
+        )
+        iterations += 1
+        if iterations > 20:
+            break
+    if keep_generating and text:
+        queue.append(text)
+    numbered = "\n".join(f"{i+1}. {p}" for i, p in enumerate(queue))
+    return result, queue, numbered
+
+
+def clear_storage():
+    return [], [], [], "", gr.Dropdown.update(choices=[], value=None)
+
+
+with gr.Blocks(title="Chatterbox TTS", js=LOCAL_JS) as demo:
     gr.Markdown("# Chatterbox TTS\nGenerate expressive speech with your own voice sample.")
     model_state = gr.State(None)
     queue_state = gr.State([])
     sample_state = gr.State([])
+    output_state = gr.State([])
 
     with gr.Tab("Synthesize"):
         with gr.Row():
@@ -126,14 +173,30 @@ with gr.Blocks(title="Chatterbox TTS") as demo:
                     repetition_penalty = gr.Slider(1.00, 2.00, step=0.1, label="repetition_penalty", value=1.2)
 
                 add_prompt_btn.click(add_prompt, [queue_state, text], [queue_state, queue_display])
-                add_sample_btn.click(add_sample, [sample_state, sample_input], [sample_state, sample_select])
+                add_sample_btn.click(add_sample, [sample_state, sample_input], [sample_state, sample_select]).then(
+                    None, None, None, js="(s)=>saveItem('samples', s)"
+                )
 
                 run_btn = gr.Button("Generate", variant="primary")
+                generate_all_btn = gr.Button("Generate All")
+                keep_gen = gr.Checkbox(label="Keep generating")
+                clear_btn = gr.Button("Clear LocalStorage")
 
             with gr.Column():
                 audio_output = gr.Audio(label="Output Audio")
 
         demo.load(fn=load_model, inputs=[], outputs=model_state)
+        demo.load(
+            fn=None,
+            inputs=[],
+            outputs=[sample_state, output_state],
+            js="()=>[loadItem('samples'), loadItem('outputs')]",
+        )
+        demo.load(
+            fn=refresh_samples,
+            inputs=[sample_state],
+            outputs=sample_select,
+        )
 
         run_btn.click(
             fn=generate_next,
@@ -152,6 +215,33 @@ with gr.Blocks(title="Chatterbox TTS") as demo:
                 repetition_penalty,
             ],
             outputs=[audio_output, queue_state, queue_display],
+        ).then(None, None, None, js="(a)=>{let o=loadItem('outputs');o.push(a);saveItem('outputs',o);}")
+
+        generate_all_btn.click(
+            fn=generate_all,
+            inputs=[
+                model_state,
+                queue_state,
+                sample_state,
+                sample_select,
+                text,
+                exaggeration,
+                temp,
+                seed_num,
+                cfg_weight,
+                min_p,
+                top_p,
+                repetition_penalty,
+                keep_gen,
+            ],
+            outputs=[audio_output, queue_state, queue_display],
+        ).then(None, None, None, js="(a)=>{let o=loadItem('outputs');o.push(a);saveItem('outputs',o);}")
+
+        clear_btn.click(
+            fn=clear_storage,
+            inputs=[],
+            outputs=[sample_state, queue_state, output_state, queue_display, sample_select],
+            js="clearLS"
         )
 
     with gr.Tab("About"):

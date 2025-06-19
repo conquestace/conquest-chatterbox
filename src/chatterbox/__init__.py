@@ -6,8 +6,12 @@ except ImportError:
 __version__ = version("chatterbox-tts")
 
 
-from .tts import ChatterboxTTS
-from .vc import ChatterboxVC
+try:
+    from .tts import ChatterboxTTS
+    from .vc import ChatterboxVC
+except Exception:  # optional when dependencies missing
+    ChatterboxTTS = None
+    ChatterboxVC = None
 from .audio_editing import (
     splice_audios,
     trim_audio,
