@@ -104,6 +104,19 @@ with open("sample_prompts.json") as f:
 wav = model.generate(sample_prompts[0])
 ```
 
+## Running the Flask API
+
+You can also interact with Chatterbox via a lightweight REST API. Start the
+server by running:
+
+```bash
+python main.py
+```
+
+This launches a Flask application on `http://localhost:5000`. The root endpoint
+returns a short message and you can access the TTS and voice conversion APIs at
+`/api/tts` and `/api/vc` respectively.
+
 # Supported Lanugage
 Currenlty only English.
 
