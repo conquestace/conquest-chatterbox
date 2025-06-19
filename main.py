@@ -1,4 +1,6 @@
 import random
+from pathlib import Path
+
 import numpy as np
 import torch
 import librosa
@@ -58,6 +60,50 @@ def tts_generate(model, text, audio_prompt_path, exaggeration, temperature, seed
         repetition_penalty=repetition_penalty,
     )
     return (model.sr, wav.squeeze(0).numpy())
+
+
+def add_prompt(queue, text):
+    queue = queue or []
+    if text:
+        queue.append(text)
+    return queue, "\n".join(queue)
+
+
+def add_sample(sample_list, sample_path):
+    sample_list = sample_list or []
+    if sample_path:
+        sample_list.append(sample_path)
+    names = [Path(p).name for p in sample_list]
+    return sample_list, gr.Dropdown.update(choices=names, value=names[-1] if names else None)
+
+
+def generate_next(model, queue, samples, selected_sample, text, exaggeration, temperature, seed_num, cfgw, min_p, top_p, repetition_penalty):
+    if queue:
+        prompt = queue.pop(0)
+    else:
+        prompt = text
+
+    sample_path = None
+    if selected_sample:
+        for p in samples or []:
+            if Path(p).name == selected_sample:
+                sample_path = p
+                break
+
+    sr, wav = tts_generate(
+        model,
+        prompt,
+        sample_path,
+        exaggeration,
+        temperature,
+        seed_num,
+        cfgw,
+        min_p,
+        top_p,
+        repetition_penalty,
+    )
+
+    return (sr, wav), queue, "\n".join(queue)
 
 
 def vc_generate(model, audio, target_voice_path):
@@ -120,6 +166,8 @@ with gr.Blocks(title="Chatterbox") as demo:
     gr.Markdown("# Chatterbox Main Interface")
     tts_state = gr.State(None)
     vc_state = gr.State(None)
+    queue_state = gr.State([])
+    sample_state = gr.State([])
 
     with gr.Tab("Text to Speech"):
         with gr.Row():
@@ -131,7 +179,12 @@ with gr.Blocks(title="Chatterbox") as demo:
                     value=EXAMPLE_TEXTS[0],
                 )
                 gr.Examples(EXAMPLE_TEXTS, inputs=text, label="Example prompts")
-                ref_wav = gr.Audio(sources=["upload", "microphone"], type="filepath", label="Reference Audio File", value=None)
+                add_prompt_btn = gr.Button("Add to Queue")
+                queue_display = gr.Textbox(label="Prompt Queue", interactive=False)
+
+                sample_input = gr.Audio(sources=["upload", "microphone"], type="filepath", label="Add Voice Sample", value=None)
+                add_sample_btn = gr.Button("Add Sample")
+                sample_select = gr.Dropdown(label="Voice Sample", choices=[])
                 exaggeration = gr.Slider(0.25, 2, step=.05, label="Exaggeration (Neutral = 0.5)", value=.5)
                 cfg_weight = gr.Slider(0.0, 1, step=.05, label="CFG/Pace", value=0.5)
 
@@ -142,6 +195,9 @@ with gr.Blocks(title="Chatterbox") as demo:
                     top_p = gr.Slider(0.00, 1.00, step=0.01, label="top_p", value=1.00)
                     repetition_penalty = gr.Slider(1.00, 2.00, step=0.1, label="repetition_penalty", value=1.2)
 
+                add_prompt_btn.click(add_prompt, [queue_state, text], [queue_state, queue_display])
+                add_sample_btn.click(add_sample, [sample_state, sample_input], [sample_state, sample_select])
+
                 run_tts = gr.Button("Generate", variant="primary")
 
             with gr.Column():
@@ -149,11 +205,13 @@ with gr.Blocks(title="Chatterbox") as demo:
 
         demo.load(fn=load_tts_model, inputs=[], outputs=tts_state)
         run_tts.click(
-            fn=tts_generate,
+            fn=generate_next,
             inputs=[
                 tts_state,
+                queue_state,
+                sample_state,
+                sample_select,
                 text,
-                ref_wav,
                 exaggeration,
                 temp,
                 seed_num,
@@ -162,7 +220,7 @@ with gr.Blocks(title="Chatterbox") as demo:
                 top_p,
                 repetition_penalty,
             ],
-            outputs=tts_output,
+            outputs=[tts_output, queue_state, queue_display],
         )
 
     with gr.Tab("Voice Conversion"):
