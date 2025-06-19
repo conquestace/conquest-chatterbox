@@ -25,6 +25,7 @@ dependencies = [
 [project.optional-dependencies]
 server = [
     "Flask>=3.1",
+    "gradio>=4.28.0",
 ]
 
 [project.urls]
