@@ -1,8 +1,9 @@
-import random
-import numpy as np
+import os
+import time
 import torch
 import gradio as gr
-from chatterbox.tts import ChatterboxTTS
+import requests
+import librosa
 
 EXAMPLE_TEXTS = [
     "Now let's make my mum's favourite. So three mars bars into the pan. Then we add the tuna and just stir for a bit, just let the chocolate and fish infuse. A sprinkle of olive oil and some tomato ketchup. Now smell that. Oh boy this is going to be incredible.",
@@ -12,44 +13,36 @@ EXAMPLE_TEXTS = [
 
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+ORCH_URL = os.getenv("ORCHESTRATOR_URL", "http://localhost:8000")
 
 
-def set_seed(seed: int):
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    random.seed(seed)
-    np.random.seed(seed)
-
-
-def load_model():
-    model = ChatterboxTTS.from_pretrained(DEVICE)
-    return model
-
-
-def generate(model, text, audio_prompt_path, exaggeration, temperature, seed_num, cfgw, min_p, top_p, repetition_penalty):
-    if model is None:
-        model = ChatterboxTTS.from_pretrained(DEVICE)
-
+def generate(text, audio_prompt_path, exaggeration, temperature, seed_num, cfgw, min_p, top_p, repetition_penalty):
+    params = {
+        "audio_prompt_path": audio_prompt_path,
+        "exaggeration": exaggeration,
+        "temperature": temperature,
+        "cfg_weight": cfgw,
+        "min_p": min_p,
+        "top_p": top_p,
+        "repetition_penalty": repetition_penalty,
+    }
     if seed_num != 0:
-        set_seed(int(seed_num))
-
-    wav = model.generate(
-        text,
-        audio_prompt_path=audio_prompt_path,
-        exaggeration=exaggeration,
-        temperature=temperature,
-        cfg_weight=cfgw,
-        min_p=min_p,
-        top_p=top_p,
-        repetition_penalty=repetition_penalty,
-    )
-    return (model.sr, wav.squeeze(0).numpy())
+        params["seed"] = int(seed_num)
+    payload = {"text": text, "params": params}
+    resp = requests.post(f"{ORCH_URL}/tts", json={"type": "tts", "payload": payload})
+    job_id = resp.json()["job_id"]
+    for _ in range(120):
+        time.sleep(1)
+        hist = requests.get(f"{ORCH_URL}/history").json()
+        if job_id in hist:
+            wav_path = hist[job_id]["url"]
+            wav, sr = librosa.load(wav_path, sr=None)
+            return sr, wav
+    raise gr.Error("Timed out waiting for audio")
 
 
 with gr.Blocks(title="Chatterbox TTS") as demo:
     gr.Markdown("# Chatterbox TTS\nGenerate expressive speech with your own voice sample.")
-    model_state = gr.State(None)
 
     with gr.Tab("Synthesize"):
         with gr.Row():
@@ -77,12 +70,9 @@ with gr.Blocks(title="Chatterbox TTS") as demo:
             with gr.Column():
                 audio_output = gr.Audio(label="Output Audio")
 
-        demo.load(fn=load_model, inputs=[], outputs=model_state)
-
         run_btn.click(
             fn=generate,
             inputs=[
-                model_state,
                 text,
                 ref_wav,
                 exaggeration,
