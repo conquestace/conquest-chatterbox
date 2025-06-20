@@ -221,4 +221,4 @@ with gr.Blocks(title="Chatterbox") as demo:
                 run_cross.click(edit_crossfade, [cross_a, cross_b, duration], cross_out)
 
 if __name__ == "__main__":
-    demo.queue(max_size=50, default_concurrency_limit=1).launch()
+    demo.queue(max_size=50, default_concurrency_limit=1).launch(server_name='0.0.0.0', share=False)
