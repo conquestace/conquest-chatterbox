@@ -1,40 +1,64 @@
 {% extends 'base.html' %}
 {% block content %}
-<p>Welcome to Chatterbox. Use the API endpoints below:</p>
+<p>Welcome to Chatterbox. Use the tools below to interact with the API.</p>
 <ul>
     <li><a href="/api/tts">/api/tts</a> - Text to speech</li>
     <li><a href="/api/vc">/api/vc</a> - Voice conversion</li>
     <li><a href="/api/edit">/api/edit</a> - Audio editing</li>
-    <li><a href="/gradio">/gradio</a> - Full demo interface</li>
 </ul>
 
-<h2>Quick Demo</h2>
-<form id="tts-form">
+<h2>Text to Speech</h2>
+<form id="tts-form" method="post">
     <label for="tts-text">Text:</label><br>
     <textarea id="tts-text" name="text" rows="4" cols="50"></textarea><br>
     <button type="submit">Synthesize</button>
 </form>
 <audio id="tts-audio" controls style="display:none"></audio>
 
-<script>
-document.getElementById('tts-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const text = document.getElementById('tts-text').value;
-    const resp = await fetch('/api/tts', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({text})
-    });
-    if (resp.ok) {
-        const blob = await resp.blob();
-        const url = URL.createObjectURL(blob);
-        const audio = document.getElementById('tts-audio');
-        audio.src = url;
-        audio.style.display = 'block';
-        audio.play();
-    } else {
-        alert('Error synthesizing speech');
-    }
-});
-</script>
+<h2>Voice Conversion</h2>
+<form id="vc-form" method="post" enctype="multipart/form-data">
+    <label for="vc-audio">Source Audio:</label>
+    <input type="file" id="vc-audio" name="audio" accept="audio/*" required><br>
+    <label for="vc-target">Target Voice (optional):</label>
+    <input type="file" id="vc-target" name="target_voice" accept="audio/*"><br>
+    <button type="submit">Convert</button>
+</form>
+<audio id="vc-audio" controls style="display:none"></audio>
+
+<h2>Audio Editing</h2>
+<h3>Splice</h3>
+<form id="edit-splice" method="post" enctype="multipart/form-data">
+    <input type="file" name="audio1" accept="audio/*" required>
+    <input type="file" name="audio2" accept="audio/*" required>
+    <button type="submit">Splice</button>
+</form>
+<h3>Trim</h3>
+<form id="edit-trim" method="post" enctype="multipart/form-data">
+    <input type="file" name="audio" accept="audio/*" required>
+    <input type="number" step="any" name="start" placeholder="Start sec">
+    <input type="number" step="any" name="end" placeholder="End sec">
+    <button type="submit">Trim</button>
+</form>
+<h3>Insert</h3>
+<form id="edit-insert" method="post" enctype="multipart/form-data">
+    <input type="file" name="base" accept="audio/*" required>
+    <input type="file" name="insert" accept="audio/*" required>
+    <input type="number" step="any" name="position" placeholder="Position sec">
+    <button type="submit">Insert</button>
+</form>
+<h3>Delete Segment</h3>
+<form id="edit-delete" method="post" enctype="multipart/form-data">
+    <input type="file" name="audio" accept="audio/*" required>
+    <input type="number" step="any" name="start" placeholder="Start sec">
+    <input type="number" step="any" name="end" placeholder="End sec">
+    <button type="submit">Delete</button>
+</form>
+<h3>Crossfade</h3>
+<form id="edit-crossfade" method="post" enctype="multipart/form-data">
+    <input type="file" name="audio1" accept="audio/*" required>
+    <input type="file" name="audio2" accept="audio/*" required>
+    <input type="number" step="any" name="duration" placeholder="Duration sec" value="0.01">
+    <button type="submit">Crossfade</button>
+</form>
+<audio id="edit-audio" controls style="display:none"></audio>
 {% endblock %}
